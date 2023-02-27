@@ -162,22 +162,7 @@ pdf(file = "~/Desktop/FigSI4C.pdf", width = 6, height =4.75 )
   legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n")
   dev.off()
 ```
-```{r}
-#Delete after use
-  plot(reihm$A1,reihm$ic,type="l",log="y", xlab="Cross reactive antibody at time 0",ylab="Peak infected cells", cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
-  points(c(reihm$A1[1],reihm$A1[8],reihm$A1[19]), c(reihm$ic[1],reihm$ic[8],reihm$ic[19]), col=c("black", "red", "blue"),lwd=4)
-y1=ode(c(I=0,V1=0.1,V2=0,A1=reihm$A1[1],A2=0.036,X=0),seq(0,18,0.1),fade, c(r1=29, r2=74, k1=0.25,k2=0.25,s1=1,s2=1,s3=0))#Low
-y2=ode(c(I=0,V1=0.1,V2=0,A1=reihm$A1[8],A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=1,s2=1,s3=0)) #Intermediate 
-y3=ode(c(I=0,V1=0.1,V2=0,A1=reihm$A1[19],A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=1,s2=1,s3=0))#High  
 
-pdf(file = "~/Desktop/FigSI4D.pdf", width = 6, height =4.75 ) 
-  par(mfrow=c(1,1))
-plot(y1[,1],y1[,"A1"]+y1[,"A2"], type="l" , xlim=c(0,18), log="y", ylab="Relative Ab Level", main="Ab Dynamics Given Cross-Reactive Ab", xlab="Day Post Infection", cex.lab=1.2, cex.main=1.3, cex.axis=1.4, lwd=2, col="black")
-lines(y2[,1],y2[,"A1"]+y2[,"A2"], col="red", lwd=2)
-lines(y3[,1],y3[,"A1"]+y3[,"A2"], col="blue",lwd=2)
-  legend("bottomright", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1,lwd=2, bty="n", cex=1.2)
-    dev.off()
-```
 
 
 
@@ -435,7 +420,6 @@ legend("bottomright", legend=c("koff=50", "koff=100", "koff=150"), col=c("blue",
 dev.off()
 ```
 
-###---------Ignore The Following Chunks--------###
 ###---Plotting Digitized Data
 
 ```{r}
@@ -480,86 +464,10 @@ dev.off()
 
 ```
 
-```{r}
-
-conc2<-c(18, 6,2,0.67,0.22, 0)
-peaks2<-c(0.58, 1.92, 1.64, 2.51, 2.76, 0.76)
-se<-c(0.16, 0.37, 0.28, 0.22, 0.38)
- pdf(file = "~/Desktop/Fig3A-Alt.pdf", width = 6, height =4.75 ) 
- par(mfrow=c(1,1))
-plot(conc2, peaks2, main= "DENV4 in Rhesus Macaque", xlab="Concentration of IgG (mg/Kg)", ylab= "Peak Viremia (Log10 FFU/ml)",cex.lab=1.4, cex.main=1.5, cex.axis=1.4, type="b")
-#lines(conc2, peaks2+se, col="red")
-#lines(conc2, peaks2-se, col="red")
-dev.off()
-``` 
 
 
 
 
-##---Former Only SI Figure - Now SI9
 
-```{r,echo=FALSE}
-#Generating Figure S1 - Modelling Disassociation Between Antibody and Virions
-
-#Analytically Solving For r1 & r2 in Mathematica Gives the Following:
-fqss=function(A,B,k,l,t){ #helper function for fade3
- #A is kon*quantity & k is koff for antibody a, B is kon*quantity & l is koff for antibody b, t is time, pa & pb are proportion of sites bound by antibody a & b
- S=sqrt((A+B+k+l)^2 - 4*(A*l+B*k+k*l))
- pa=A/(A*l+B*k+k*l)*((exp((S-A-B-k-l)*t/2)*((A+k-l)*l+B*(2*k-l)-l*S) - exp((-S-A-B-k-l)*t/2)*((A+k-l)*l+B*(2*k-l)+l*S))/S/2 + l)
- pb=B/(A*l+B*k+k*l)*((exp((S-A-B-k-l)*t/2)*((B+l-k)*k+A*(2*l-k)-k*S) - exp((-S-A-B-k-l)*t/2)*((B+l-k)*k+A*(2*l-k)+k*S))/S/2 + k)
- list(pa=pa,pb=pb)
-}
-
-#Solve ODE System
-fade3=function(t,state,parameters){
- with(as.list(c(state,parameters)),{
-  p=fqss(A=A1*0.16,B=A2*0.16,k=koffa,l=koffb,t=seq(0,0.5,0.001))
-  u=approx(sort(p$pa+p$pb),seq(0,0.5,0.001),c(0.1,0.5),ties="ordered")$y #times needed to reach V2 & V3 states at current antibody levels
-  u=ifelse(is.na(u),Inf,u)
-  V1=I*(exp(-a*u[1])/-a - 1/-a) #V1 virus (virus produced between u[1] days ago & now)
-  V2=I*(exp(-a*u[2])/-a - exp(-a*u[1])/-a) #V2 virus (virus produced between u[2] & u[1] days ago)
-  dI = -b*I + r1*V1 + r2*V2 - I*X #infected cells
-  dA1= s1*(I>1)*A1 #antibody a
-  dA2= s2*(I>1)*A2 #antibody b
-  dX = s3*(I>1) #nonantibody immune response
-  list(c(dI,dA1,dA2,dX))
- })}
-
-  # y3=ode(c(I=0,V1=0.1,V2=0,A1=rslo$A1[19],A2=0.036,X=0),seq(0,18,0.1),fade,
-   #c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0.5,s2=1,s3=0))  
-   
-rkoff11=ldply(c(0,0.01,0.025,seq(0.2,1,0.1)^2),function(A1){ #cross reactive memory antibody has koff=30
- y=ode(c(I=0.2,A1=A1,A2=0.021,X=0),seq(0,14,0.1),fade3,
-  c(a=10,b=1,koffa=30,koffb=10,r1=25,r2=37,s1=1,s2=1,s3=0),"rk4")
- c(A1=A1,ic=max(y[,"I"]))
-})
-rkoff22=ldply(c(0,0.01,0.025,seq(0.2,1,0.1)^2),function(A1){ #cross reactive memory antibody has koff=100
- y=ode(c(I=0.2,A1=A1,A2=0.021,X=0),seq(0,14,0.1),fade3,
-  c(a=10,b=1,koffa=100,koffb=10,r1=25,r2=37,s1=1,s2=1,s3=0),"rk4")
- c(A1=A1,ic=max(y[,"I"]))
-})
-#Plot peak of infected cells under different cross-reactive Ab IC, when antigenic seniority does and does not supress de novo AB response (depends on AB IC)
-plot(rkoff11$A1,rkoff11$ic,type="l",log="y",ylim=range(c(rkoff11$ic,rkoff22$ic)),
- xlab="Cross reactive antibody at time 0",ylab="Peak infected cells")
-lines(rkoff22$A1,rkoff22$ic,col=2)
-legend("topright",expression("koff"[c]*"=30","koff"[offc][,][c]*"=100"),fill=1:2 , bty="n")
-
-original<-rkoff22$ic[1]
-      max.it<-rkoff22$ic[which.max(rkoff22$ic)]
-   fold<-(max.it)/original
-   fold
-   
-   pdf(file = "~/Desktop/FigS9.pdf", width = 6, height =4.75 ) 
-     par(mfrow=c(1,1))
-plot(rkoff11$A1,rkoff11$ic,type="l",log="y",ylim=range(c(rkoff11$ic,rkoff22$ic)),
- xlab="Cross-reactive antibody at time 0",ylab="Peak infected cells", lwd=2)
-lines(rkoff22$A1,rkoff22$ic,col=2, lwd=2)
-legend("topright",expression("k"[offc]*"=30","k"[offc]*"=100"),fill=1:2 , bty="n")
-       dev.off()
-```
-
-**Figure S1A. koff~c~=100/day produces some EI-HM. The figure shows simulation results from a modification to the simple ADE model such that dissociation between antibody and virus is explicitly modeled. When the cross reactive antibody has 3 times the dissociation rate of the de novo antibody (koff~c~=30/day versus koff~n~=10/day), there is no EI-HM. But, when the cross reactive antibody has 10 times the dissociation rate of the de novo antibody (koff~c~=100/day, koff~n~=10/day), there is some enhancement of infection at low levels of baseline cross reactive antibody.**
-
-With koff~c~=30/day no EI-HM was observed. With koff~c~=100/day there is some enhancement of infection at low levels of A~c~(0). But the degree of enhancement is relatively small -- a 10 fold difference in dissociation rate translates into maximum enhancement of only \~1.17 fold compared to A~c~(0)=0.
 
 
