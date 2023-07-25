@@ -5,4 +5,4 @@ This code follows the outline of the paper going over: in vitro addition of pass
 
 Each chunk is labelled with the figure it corresponds to, beginning with Figure 2 (Figure 1 was a schematic). Figure subpanels from digitized data are labeled and at the end. 
 
-Supplemental figures, not generated from main text models, are included in the order they are found in the manuscript. 
+Supplemental figures, not generated from main text models, are included in the order they are found in the Supplemental text. 
