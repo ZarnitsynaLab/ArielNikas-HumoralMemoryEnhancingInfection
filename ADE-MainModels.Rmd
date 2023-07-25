@@ -1,0 +1,509 @@
+---
+title: "When Does Humoral Memory Enhance Infection?"
+author: "Ariel Nikas & Hasan Ahmed"
+date: "2/27/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+options(stringsAsFactors=F,width=80); library(plyr); library(deSolve)
+```
+
+```{r Generate-Figure-2,echo=FALSE}
+#--Set Up ODE System and Generate Figure 2  (Figure 1 is a conceptual diagram)
+fade=function(t,state,parameters){ #Gives the model ODE system, assuming no growth of antibodies in order to establish a baseline for the other figures
+ with(as.list(c(state,parameters)),{
+  dI = -I + r1*V1 + r2*V2 - I*X              #Infected Cells
+  dV1=  I - V1*(10+A1+A2)                    #Unbound Virus 
+  dV2= V1*(A1+A2) - V2*(10+k1*A1+k2*A2)      #Semi-bound Virus
+  dA1= s1*(I>1)*A1                           #Cross-reactive Ab (off)
+  dA2= s2*(I>1)*A2                           #De novo Ab or Passive Ab, depending on parameters (off)
+  dX = s3*(I>1)                              #Other Innate Immune Response (off)
+  list(c(dI,dV1,dV2,dA1,dA2,dX))
+ })}
+riv=ldply(seq(0,9,0.2)^2,function(A1){ #Find the solutions for various initial values of the A1 Ab
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0,X=0),0:10,fade, #IC, time, eqns, and params
+  c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=0,s3=0))  
+ c(A1=A1,agr=log(y[[11,"I"]]/y[[10,"I"]]),ic=y[[3,"I"]])
+})
+
+
+#--Plotting I post-48 hours Given Different IC for A1 antibodies (on a log scale): Main Text Figure
+pdf(file = "~/Desktop/Fig2.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(riv$A1,riv$ic,type="l",log="y",xlab="Antibody level",ylab="Infected cells afer 2 days",cex.lab=1.4, cex.main=1.5, cex.axis=1.4, main="Simulation")
+  dev.off()
+
+#--Plotting Related Supplemental Figures
+pdf(file = "~/Desktop/FigSI2A.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(riv$A1,riv$ic,type="l",log="y",xlab="Antibody level",ylab="Infected cells afer 2 days", cex.lab=1.4, cex.main=1.5,cex.axis=1.4, lwd=2)
+  points(c(riv$A1[2],riv$A1[19],riv$A1[40]), c(riv$ic[2],riv$ic[19],riv$ic[40]), col=c("black", "red", "blue"), lwd=4)
+  dev.off()
+
+y1=ode(c(I=0,V1=0.1,V2=0,A1=riv$A1[2],A2=0.0,X=0),seq(0,2, 0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=0,s3=0)) #Low   
+y2=ode(c(I=0,V1=0.1,V2=0,A1=riv$A1[19],A2=0.0,X=0),seq(0,2, 0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=0,s3=0))#Intermediate 
+y3=ode(c(I=0,V1=0.1,V2=0,A1=riv$A1[40],A2=0.0,X=0),seq(0,2,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=0,s3=0)) #High
+   
+pdf(file = "~/Desktop/FigSI2B.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"V1"]+y1[,"V2"], type="l" , xlim=c(0,2), log="y", ylab="Viral Units", main="Viral Dynamics", xlab="Day Post Infection", cex.lab=1.4, cex.main=1.5,cex.axis=1.4, ylim=c(0.01,20), lwd=2)
+  lines(y2[,1],y2[,"V1"]+y2[,"V2"], col="red", lwd=2)
+  lines(y3[,1],y3[,"V1"]+y3[,"V2"], col="blue", lwd=2 )
+  legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n")
+  dev.off()
+   
+pdf(file = "~/Desktop/FigSI2C.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"I"], type="l" , xlim=c(0,2), log="y", ylab="Infected Cells", main="Infection Dynamics", xlab="Day Post Infection", ylim=c(0.1,300), cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+  lines(y2[,1],y2[,"I"], col="red", lwd=2)
+  lines(y3[,1],y3[,"I"], col="blue" , lwd=2)
+  legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n")
+  dev.off()
+
+#-Calculating Fold Change
+original<-riv$ic[1]
+max.it<-riv$ic[which.max(riv$ic)]
+fold<-(max.it)/original
+fold
+```
+
+
+```{r,echo=FALSE}
+#--Generate Figure 3 - Passive Antibody Response in vivo
+reipa=ldply(seq(0,8,0.2)^2,function(A1){
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=1,s3=0)) # Because passive AB (A1) have no growth, s1 =0
+ c(A1=A1,ic=max(y[,"I"]))
+})
+
+#--Plotting peak of infected cells when passive (maternal) Abs are the only immune contribution
+pdf(file = "~/Desktop/Fig3.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(reipa$A1,reipa$ic,type="l",log="y", xlab="Passive antibody",ylab="Peak infected cells", cex.lab=1.4, cex.main=1.5,cex.axis=1.4, main="Simulation")
+  dev.off()
+
+#--Plotting Related Supplemental Figures
+pdf(file = "~/Desktop/FigSI3A.pdf", width = 6, height =4.75) 
+  par(mfrow=c(1,1))
+  plot(reipa$A1,reipa$ic,type="l",log="y", xlab="Passive antibody",ylab="Peak infected cells", cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+  points(c(reipa$A1[1],reipa$A1[18],reipa$A1[40]), c(reipa$ic[1],reipa$ic[18],reipa$ic[40]), col=c("black", "red", "blue"), lwd=4)
+  dev.off()
+
+y1=ode(c(I=0,V1=0.1,V2=0,A1=reipa$A1[1],A2=0.036,X=0),seq(0,20),fade, c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=1,s3=0))   #Low
+y2=ode(c(I=0,V1=0.1,V2=0,A1=reipa$A1[18],A2=0.036,X=0),seq(0,20),fade, c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=1,s3=0))  #Intermediate
+y3=ode(c(I=0,V1=0.1,V2=0,A1=reipa$A1[40],A2=0.036,X=0),seq(0,20),fade, c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=1,s3=0))  #High
+   
+pdf(file = "~/Desktop/FigSI3B.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"V1"]+y1[,"V2"], type="l" , xlim=c(0,20), log="y", ylab="Viral Units", main="Viral Dynamics Given Passive Ab", xlab="Day Post Infection", cex.lab=1.4, cex.main=1.5, cex.axis=1.4, ylim=c(1,max(y2[,"V1"]+y2[,"V2"])),lwd=2)
+  lines(y2[,1],y2[,"V1"]+y2[,"V2"], col="red", lwd=2)
+  lines(y3[,1],y3[,"V1"]+y3[,"V2"], col="blue", lwd=2)
+  legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n", lwd=2)
+  dev.off()
+
+pdf(file = "~/Desktop/FigSI3C.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"I"], type="l" , xlim=c(0,20), log="y", ylab="Infected Cells", main="Infection Dynamics Given Passive Ab", xlab="Day Post Infection", ylim=c(1,max(y2[,"I"])), cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+  lines(y2[,1],y2[,"I"], col="red", lwd=2)
+  lines(y3[,1],y3[,"I"], col="blue",lwd=2)
+  legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n")
+  dev.off()
+
+#--Calculating Fold Change
+original<-reipa$ic[1]
+max.it<-reipa$ic[which.max(reipa$ic)]
+fold<-(max.it)/original 
+fold
+```
+
+
+```{R}
+#Primary infection 
+pdf(file = "~/Desktop/PrimaryNOS-sr0.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"I"], type="l" , xlim=c(0.1,20), log="y", ylab="Units", main="", xlab="Day Post Infection", ylim=c(1,max(y2[,"I"])), cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+
+lines(y1[,1],y1[,"V1"], type="l" , lwd=2, col="dodgerblue")
+  lines(y1[,1],y1[,"V2"], col="blue", lwd=2)
+  legend("topleft", legend=c("Infected Cells", "V1 Virus", "V2 Virus"), lwd=2, lty=1, col=c("black", "dodgerblue", "blue"), bty="n")
+  dev.off()
+  
+  
+  y1=ode(c(I=0,V1=0.1,V2=0,A1=reipa$A1[1],A2=0.036,X=0),seq(0,20),fade, c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=1,s3=0.27))   #Low
+  
+  pdf(file = "~/Desktop/PrimaryNOS-sr27.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"I"], type="l" , xlim=c(0.1,20), log="y", ylab="Units", main="Infection Dynamics Under Primary Infection", xlab="Day Post Infection", ylim=c(1,max(y2[,"I"])), cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+
+lines(y1[,1],y1[,"V1"], type="l" , lwd=2, col="dodgerblue")
+  lines(y1[,1],y1[,"V2"], col="blue", lwd=2)
+  legend("topleft", legend=c("Infected Cells", "Free Virus", "Partially Bound Virus"), lwd=2, lty=1, col=c("black", "dodgerblue", "blue"), bty="n")
+  dev.off()
+  
+    
+  y1=ode(c(I=0,V1=0.1,V2=0,A1=reipa$A1[1],A2=0.036,X=0),seq(0,20),fade, c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0,s2=1,s3=0.54))   #Low
+  
+  pdf(file = "~/Desktop/PrimaryNOS-sr54.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"I"], type="l" , xlim=c(0.1,20), log="y", ylab="Units", main="Infection Dynamics Under Primary Infection", xlab="Day Post Infection", ylim=c(1,max(y2[,"I"])), cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+
+lines(y1[,1],y1[,"V1"], type="l" , lwd=2, col="dodgerblue")
+  lines(y1[,1],y1[,"V2"], col="blue", lwd=2)
+  legend("topleft", legend=c("Infected Cells", "Free Virus", "Partially Bound Virus"), lwd=2, lty=1, col=c("black", "dodgerblue", "blue"), bty="n")
+  dev.off()
+```
+
+
+
+```{r,echo=FALSE}
+#Generate Figure 4 - Cross-reactive Antibody Response (as represented by A1)
+
+reihm=ldply(seq(0,4,0.2)^2,function(A1){ #Because this plateaus quickly, change x-axis to be shorter
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74,k1=0.25,k2=0.25,s1=1,s2=1,s3=0))    # Because cross-reactive AB have growth, s1 !=0
+ c(A1=A1,ic=max(y[,"I"]))
+})
+xl<-expression(Cross-reactive~antibody~at~time~0*"," ~A[c])
+
+#--Plotting Peak of Infected Cells Under Different Cross-reactive Ab IC
+pdf(file = "~/Desktop/Fig4.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(reihm$A1,reihm$ic,type="l",log="y",xlab=xl,ylab="Peak infected cells",cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+  dev.off()
+
+#--Plotting Related Supplemental Figures (A, B, & C)
+pdf(file = "~/Desktop/FigSI4A.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(reihm$A1,reihm$ic,type="l",log="y", xlab="Cross reactive antibody at time 0",ylab="Peak infected cells", cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+  points(c(reihm$A1[1],reihm$A1[8],reihm$A1[19]), c(reihm$ic[1],reihm$ic[8],reihm$ic[19]), col=c("black", "red", "blue"),lwd=4)
+  dev.off()
+
+y1=ode(c(I=0,V1=0.1,V2=0,A1=reihm$A1[1],A2=0.036,X=0),seq(0,18,0.1),fade, c(r1=29, r2=74, k1=0.25,k2=0.25,s1=1,s2=1,s3=0))#Low
+y2=ode(c(I=0,V1=0.1,V2=0,A1=reihm$A1[8],A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=1,s2=1,s3=0)) #Intermediate 
+y3=ode(c(I=0,V1=0.1,V2=0,A1=reihm$A1[19],A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=1,s2=1,s3=0))#High  
+   
+pdf(file = "~/Desktop/FigSI4B.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"V1"]+y1[,"V2"], type="l" , xlim=c(0,18), log="y", ylab="Viral Units", main="Viral Dynamics Given Cross-Reactive Ab", xlab="Day Post Infection", cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+  lines(y2[,1],y2[,"V1"]+y2[,"V2"], col="red",lwd=2)
+  lines(y3[,1],y3[,"V1"]+y3[,"V2"], col="blue",lwd=2 )
+  legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n")
+  dev.off()
+   
+pdf(file = "~/Desktop/FigSI4C.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"I"], type="l" , xlim=c(0,18), log="y", ylab="Infected Cells", main="Infection Dynamics Given Cross-Reactive Ab", xlab="Day Post Infection", ylim=c(1,max(y1[,"I"])), cex.lab=1.4, cex.main=1.5, cex.axis=1.4,lwd=2)
+  lines(y2[,1],y2[,"I"], col="red",lwd=2)
+  lines(y3[,1],y3[,"I"], col="blue" ,lwd=2)
+  legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n")
+  dev.off()
+```
+
+
+
+
+```{r}
+#Generate Figure OLD 5 - Cross-reactive Ab (as represented by A1) grows more slowly that de novo Ab (as represented by A2)
+
+rslo=ldply(seq(0,4,0.2)^2,function(A1){
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0.5,s2=1,s3=0))  #Slow CR Ab (A1 & s1) with faster de novo (A2 & s2)
+ c(A1=A1,ic=max(y[,"I"]), peak=y[which.max(y[,"I"]),"time"], percent=y[y[which.max(y[,"I"]),"time"], "A1"]/(y[y[which.max(y[,"I"]),"time"], "A1"]+y[y[which.max(y[,"I"]),"time"], "A2"]) )
+})
+
+
+#--Plotting Peak of Infected Cells Under Different Cross-reactive Ab IC, When de novo Ab Compete
+xl<-expression(Cross-reactive~antibody~at~time~0*"," ~A[c])
+pdf(file = "~/Desktop/Fig5.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(rslo$A1,rslo$ic,type="l",log="y",
+  xlab=xl,ylab="Peak infected cells", cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+  dev.off()
+
+#--Plotting Related Supplemental Figures (A, B, & C)
+pdf(file = "~/Desktop/FigSI5A.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(rslo$A1,rslo$ic,type="l",log="y", xlab="Cross reactive antibody at time 0",ylab="Peak infected cells", cex.lab=1.4, cex.main=1.5, cex.axis=1.4,lwd=2)
+  points(c(rslo$A1[1],rslo$A1[6],rslo$A1[19]), c(rslo$ic[1],rslo$ic[6],rslo$ic[19]), col=c("black", "red", "blue"),lwd=4)
+  dev.off()
+ 
+y1=ode(c(I=0,V1=0.1,V2=0,A1=rslo$A1[1],A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0.5,s2=1,s3=0))  #Low
+y2=ode(c(I=0,V1=0.1,V2=0,A1=rslo$A1[6],A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0.5,s2=1,s3=0))  #Intermediate
+y3=ode(c(I=0,V1=0.1,V2=0,A1=rslo$A1[19],A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74, k1=0.25,k2=0.25,s1=0.5,s2=1,s3=0)) #High 
+   
+pdf(file = "~/Desktop/FigSI5B.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"V1"]+y1[,"V2"], type="l" , xlim=c(0,18), log="y", ylab="Viral Units", main="Viral Dynamics Given Cross-Reactive Ab", xlab="Day Post Infection", cex.lab=1.4, cex.main=1.5, cex.axis=1.4,lwd=2, ylim=c(1,max(y2[,"V1"]+y2[,"V2"])))
+   lines(y2[,1],y2[,"V1"]+y2[,"V2"], col="red",lwd=2)
+   lines(y3[,1],y3[,"V1"]+y3[,"V2"], col="blue",lwd=2 )
+   legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n",lwd=2)
+    dev.off()
+    
+pdf(file = "~/Desktop/FigSI5C.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(y1[,1],y1[,"I"], type="l" , xlim=c(0,18), log="y", ylab="Infected Cells", main="Infection Dynamics Given Cross-Reactive Ab", xlab="Day Post Infection", ylim=c(1,max(y2[,"I"])), cex.lab=1.4, cex.main=1.5, cex.axis=1.4,lwd=2)
+   lines(y2[,1],y2[,"I"], col="red",lwd=2)
+   lines(y3[,1],y3[,"I"], col="blue" ,lwd=2)
+   legend("topleft", legend= c("Low", "Intermediate", "High"), col=c("black", "red", "blue"), lty=1, bty="n",lwd=2)
+   dev.off()
+
+#--Calculating Fold Change       
+original<-rslo$ic[1]
+max.it<-rslo$ic[which.max(rslo$ic)]
+fold<-(max.it)/original
+fold
+```
+
+
+```{r,echo=FALSE}
+#Generate Figure 5 - Cross-reactive Ab (as represented by A1) nuetralizes less effectively (k1) than de novo Ab (as represented by A2 ,k2)
+rbad1=ldply(seq(0,4,0.2)^2,function(A1){ #1/2 as good at neutralizing as de novo
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),fade,
+  c(r1=29, r2=74,k1=0.125,k2=0.25,s1=1,s2=1,s3=0))
+ c(A1=A1,ic=max(y[,"I"]))
+})
+rbad2=ldply(seq(0,4,0.2)^2,function(A1){#1/5 as good at neutralizing as de novo
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),fade,
+  c(r1=29, r2=74,k1=0.05,k2=0.25,s1=1,s2=1,s3=0))
+ c(A1=A1,ic=max(y[,"I"]))
+})
+
+#--Plotting Figure 6: Poor Neutralization by Cross-Reactive Ab
+xl<-expression(Cross-reactive~antibody~at~time~0*"," ~A[c])
+pdf(file = "~/Desktop/Fig5.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(rbad1$A1,rbad1$ic,type="l",log="y",ylim=c(min(rbad1$ic),max(rbad2$ic)),xlab=xl,ylab="Peak infected cells", cex.lab=1.4, cex.main=1.5, cex.axis=1.4 , col="forestgreen",lwd=2)
+  lines(rbad2$A1,rbad2$ic,col="purple", lwd=2, lty=2)
+  legend("topright",expression("k"[c2]*"=0.125","k"[c2]*"=0.05"),col=c("forestgreen", "purple"), bty="n", lty=c(1,2) )
+  dev.off()
+  
+#-Calculating Fold Change  
+original<-rbad1$ic[1]
+max.it<-rbad1$ic[which.max(rbad1$ic)]
+fold<-(max.it-original)/original
+fold
+   
+original<-rbad2$ic[1]
+max.it<-rbad2$ic[which.max(rbad2$ic)]
+fold<-(max.it)/original
+fold
+```
+
+
+```{r}
+#Generate Figure 6: Non-Antibody Immune Response Comparison -None, Little Growth, & Some Growth
+fade=function(t,state,parameters){
+ with(as.list(c(state,parameters)),{
+  dI = -I + r1*V1 + r2*V2 - I*X              #Infected Cells
+  dV1=  I - V1*(10+A1+A2)                    #Unbound Virus
+  dV2= V1*(A1+A2) - V2*(10+k1*A1+k2*A2)      #Semi-bound Virus
+  dA1= s1*(I>1)*A1                           #Cross-reactive Ab or Passive Ab
+  dA2= s2*(I>1)*A2                           #De novo Ab
+  dX = s3*(I>1)                              #Other Immune Response
+  list(c(dI,dV1,dV2,dA1,dA2,dX))
+ })}
+
+#-No Non-Ab Immune Response
+reihm=ldply(seq(0,4,0.2)^2,function(A1){ #Because this plateaus quickly, change x-axis to be shorter
+y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74,k1=0.25,k2=0.25,s1=1,s2=1,s3=0)) 
+c(A1=A1,ic=max(y[,"I"]))
+})
+#-Low level Non-Ab Immune Response (given by s3) in the presence of cross-reactive Ab
+roth4=ldply(seq(0,4,0.2)^2,function(A1){
+y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74,k1=0.25,k2=0.25,s1=1,s2=1,s3=0.26))
+c(A1=A1,ic=max(y[,"I"]))
+})
+#-Higher level Non-Ab Immune Response (given by s3) in the presence of cross-reactive Ab
+roth5=ldply(seq(0,4,0.2)^2,function(A1){
+y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),fade,c(r1=29, r2=74,k1=0.25,k2=0.25,s1=1,s2=1,s3=0.64))
+c(A1=A1,ic=max(y[,"I"]))
+}) 
+
+
+#-Plotting peak of infected cells under different cross-reactive Ab IC, when non-AB immune response is active
+xl<-expression(Cross-reactive~antibody~at~time~0*"," ~A[c])
+pdf(file = "~/Desktop/Fig6.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(reihm$A1,reihm$ic,type="l",log="y",ylim=c(min(roth5$ic),max(reihm$ic)), main="Effect of Non-Ab Immune Response Growth",xlab=xl,ylab="Peak infected cells",cex.lab=1.4, cex.main=1.5, cex.axis=1.4, col="forestgreen", lwd=2) 
+  lines(roth4$A1,roth4$ic,col=4, lwd=2 )
+  lines(roth5$A1,roth5$ic,col=6, lwd=2)
+  legend("topright",expression("s"[R]*"=0", "s"[R]*"=0.26",  "s"[R]*"=0.64"),col=c("forestgreen",4,6), bty="n", lty=c(1,1,1), lwd=2)
+  dev.off()
+
+#-Calculating Fold Change 
+original<-roth5$ic[1]
+max.it<-roth5$ic[which.max(roth5$ic)]
+fold<-(max.it)/original
+fold
+```
+
+
+```{r}
+#Generate Figure 7: Suppressive Memomory
+foas=function(t,state,parameters){
+ with(as.list(c(state,parameters)),{
+  dI = -I + r1*V1 + r2*V2 - I*X #Infected Cells
+  dV1=  I - V1*(10+A1/f+A2) #Unbound Virus
+  dV2=      V1*(   A1/f+A2) - V2*(10+k1*A1/f+k1*A2) #Semi-bound Virus V2*(10+k1*A1+k2*A2)  
+  dA1= s1*(I>1)*A1*h/(h+A1+A2) #Cross-reactive Ab or Passive Ab
+  dA2= s2*(I>1)*A2*h/(h+A1+A2) #De novo Ab
+  dX = s3*(I>1) #Other Immune Response
+  list(c(dI,dV1,dV2,dA1,dA2,dX))
+ })}
+
+#No Non-Ab Immune Response
+roas=ldply(seq(0,6,0.2)^2,function(A1){
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),foas,
+  c(r1=40, r2=40,k1=0.25,k2=0.25,s1=1.5,s2=1.5,s3=0, f=4, h=28))
+ c(A1=A1,ic=max(y[,"I"]))
+})
+
+#Some Non-Ab Immune Response
+roas2=ldply(seq(0,6,0.2)^2,function(A1){
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),foas,
+  c(r1=40, r2=40,k1=0.25,k2=0.25,s1=1.5,s2=1.5,s3=0.27, f=4, h=28))
+ c(A1=A1,ic=max(y[,"I"]))
+})
+
+#More Non-Ab Immune Response
+roas3=ldply(seq(0,6,0.2)^2,function(A1){
+ y=ode(c(I=0,V1=0.1,V2=0,A1=A1,A2=0.036,X=0),seq(0,18,0.1),foas,
+  c(r1=40, r2=40,k1=0.25,k2=0.25,s1=1.5,s2=1.5,s3=0.54, f=4, h=28))
+ c(A1=A1,ic=max(y[,"I"]))
+})
+
+#-Plotting Figure 7: Suppressive Memory with and without Non-Ab Immune Response
+pdf(file = "~/Desktop/Fig7.pdf", width = 6, height =4.75 ) 
+  par(mfrow=c(1,1))
+  plot(roas$A1,roas$ic,type="l",log="y",ylim=c(min(roas3$ic),max(roas$ic)), main="Effect of Antigenic Seniority",xlab="Cross reactive antibody at time 0",ylab="Peak infected cells", cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2, col=4) 
+  lines(roas2$A1,roas2$ic,col=2, lwd=2)
+  lines(roas3$A1,roas3$ic,col="forestgreen", lwd=2)
+  legend("topright",expression("s"[R]*"=0","s"[R]*"=0.27","s"[R]*"=0.54"),lty=1, col=c(4,2,"forestgreen"), bty="n", lwd=2)
+  dev.off()
+
+#--Calculating Fold Change
+original<-roas$ic[1]
+max.it<-roas$ic[which.max(roas$ic)]
+fold<-(max.it)/original
+fold
+
+original<-roas2$ic[1]
+max.it<-roas2$ic[which.max(roas2$ic)]
+fold<-(max.it)/original
+fold
+
+original<-roas3$ic[1]
+max.it<-roas3$ic[which.max(roas3$ic)]
+fold<-(max.it)/original
+fold
+```
+
+```{r}
+##--Plot Figure SI9 - koff 
+N=function(x) as.character(x)
+fade4=function(t,s,p){
+ v=s[grep('^V',names(s))]; a=p['kon']*s['A1']; b=p['kon']*s['A2']; k=p['koff1']; l=p['koff2']
+ n=sqrt(length(v))-1; V=matrix(0,n+3,n+3); V[2:(n+2),2:(n+2)]=v; colnames(V)=rownames(V)=seq(-1,n+1); dV=0*V
+ for(i in 0:n){for(j in 0:(n-i)){
+  dV[N(i),N(j)] = (i==0)*(j==0)*s['I'] -10*V[N(i),N(j)] +(n-i+1-j)*a*V[N(i-1),N(j)]+(n-i-j+1)*b*V[N(i),N(j-1)] +k*(i+1)*V[N(i+1),N(j)]+l*(j+1)*V[N(i),N(j+1)] -(n-i-j)*(a+b)*V[N(i),N(j)] -(k*i+l*j)*V[N(i),N(j)]
+ }}
+ S=outer(as.numeric(colnames(V)),as.numeric(rownames(V)),'+')
+ V1=sum(V[S<=floor(0.15*n)]); V2=sum(V[S<=floor(0.5*n)])-V1
+ dI = -s['I'] + p['r1']*V1 + p['r2']*V2 - s['I']*s['X'] #Infected Cells
+ dA1= p['s1']*(s['I']>1)*s['A1'] #Cross-reactive Ab or Passive Ab
+ dA2= p['s2']*(s['I']>1)*s['A2'] #De novo Ab
+ dX = p['s3']*(s['I']>1) #Other Immune Response
+ list(c(dV[2:(n+2),2:(n+2)],dI=dI,dA1=dA1,dA2=dA2,dX=dX))
+}
+
+rkoff2=ldply(seq(0,0.3,0.03)^2,function(Aa){ #cross reactive memory antibody has koff=100
+ y=ode(c(V=c(0.1,rep(0,24)),I=0,A1=Aa,A2=0.036,X=0),seq(0,20,0.1),fade4,c(r1=29,r2=74,kon=0.5,koff1=100,koff2=10,s1=1,s2=1,s3=0))
+ c(Aa=Aa,ic=max(y[,"I"]))
+})
+
+rkoff3=ldply(seq(0,0.3,0.03)^2,function(Aa){ #cross reactive memory antibody has koff=50
+ y=ode(c(V=c(0.1,rep(0,24)),I=0,A1=Aa,A2=0.036,X=0),seq(0,20,0.1),fade4,c(r1=29,r2=74,kon=0.5,koff1=50,koff2=10,s1=1,s2=1,s3=0))
+ c(Aa=Aa,ic=max(y[,"I"]))
+})
+
+rkoff4=ldply(seq(0,0.3,0.03)^2,function(Aa){ #cross reactive memory antibody has koff=150
+ y=ode(c(V=c(0.1,rep(0,24)),I=0,A1=Aa,A2=0.036,X=0),seq(0,20,0.1),fade4,c(r1=29,r2=74,kon=0.5,koff1=150,koff2=10,s1=1,s2=1,s3=0))
+ c(Aa=Aa,ic=max(y[,"I"]))
+})
+
+#-Calculating Fold Change for Each koff Value
+original<-rkoff2$ic[1]
+      max.it<-rkoff2$ic[which.max(rkoff2$ic)]
+   fold<-(max.it)/original
+   fold
+   
+   original<-rkoff3$ic[1]
+      max.it<-rkoff3$ic[which.max(rkoff3$ic)]
+   fold<-(max.it)/original
+   fold
+   
+   
+   original<-rkoff4$ic[1]
+      max.it<-rkoff4$ic[which.max(rkoff4$ic)]
+   fold<-(max.it)/original
+   fold
+   
+pdf(file = "~/Desktop/Fig-S9.pdf", width = 6, height =4.75 ) 
+par(mfrow=c(1,1))
+plot(rkoff4$Aa,rkoff4$ic,type="l",log="y",xlab="Baseline antibody",ylab="Peak infected cells", col="red", ylim=c(1e7, 13000000), cex.lab=1.4, cex.main=1.5, cex.axis=1.4, lwd=2)
+lines(rkoff3$Aa,rkoff3$ic, col="blue", lwd=2)
+lines(rkoff2$Aa,rkoff2$ic, col="black", lwd=2)
+legend("bottomright", legend=c("koff=50", "koff=100", "koff=150"), col=c("blue", "black", "red"), lty=1, bty="n", lwd=2)
+dev.off()
+```
+
+###---Plotting Digitized Data
+
+```{r}
+x.PCS<-(c(0.403, 0.845, 1.08, 1.338, 1.568, 1.814, 2.066, 2.318, 2.564, 2.81, 3.052)/0.403-0.403) # This is still both logged and shifted 
+
+x.PCS2<-10^(c(0, -3.920596, -3.37469, -2.573201, -2.126551,-1.516129, -0.8908189, -0.2659087, 0.34491322, 0.955335, 1.555831))
+x.PCS2[1]<-0
+y.PCS<-c(0.636, 0.537, 0.593, 0.636, 0.739, 1.052, 1.22, 1.158, 0.767, 0.156, 0.106)*(50/1.22)
+
+plot(x.PCS, y.PCS, type="b", ylab="% Infected Cells", xlab="Antibody Concentration (log10 ug/ml)",main="DENV2 in PBMC", cex.lab=1.4, cex.main=1.5, cex.axis=1.4) 
+
+x.K562<-10^-(13-((c(0.96, 1.089, 1.223, 1.335, 1.464, 1.587, 1.721, 1.856, 1.979, 2.102, 2.236, 2.36, 2.494, 2.623, 2.74, 2.875)-0.843)/0.423))
+y.K562<-c(1.06, 1.104, 1.136, 1.306, 1.474, 1.687, 1.989, 2.258, 2.443, 2.516, 2.404, 2.258, 1.648, 0.769, 0.282, 0.069)*(5/0.688)
+plot(x.K562, y.K562, type="b", ylab="% Infected GFP+ Cells", xlab="E47 Antibody Concentration (M)", main="West Nile in K562 DC-SIGN R Cells", cex.lab=1.4, cex.main=1.5, cex.axis=1.4)
+
+
+x.challenge<-seq(2:10)
+y.18<-(c(NA, 0.495, 0.681,0.813, 1.616, 2.523, 3.079, 2.264,1.847)*(0.5/0.764))
+y.6<-c(0.417, 1.764, 2.597, 2.921, 4.56, 2.995, 2.079, 1.718,0.606)*(0.5/0.764)
+y.2<-c(0.495, 1.764, 2.264, 2.329, 3.792, 3.264, 2.644, 0.931, 0.551)*(0.5/0.764)
+y.067<-c(NA, 3.032,3.995, 4.725, 3.866,2.773, 1.023, NA, 0.968)*(0.5/0.764)
+y.022<-c(1.356, 2.597, 4.727, 5.301, 4.60, 1.037, 0.375,0.764,NA)*(0.5/0.764)
+
+plot(x.challenge,y.18, col="blue", type="b", xlab="Day Post Challenge",ylim=c(0,3.5), ylab="Log10 Eq FFU/ml", main="")
+lines(x.challenge,y.6, col="yellow", type="b")
+lines(x.challenge,y.2, col="tan", type="b")
+lines(x.challenge,y.067, col="orange", type="b")
+lines(x.challenge,y.022, col="red", type="b")
+
+#Goncalvez Data as Peak vs. Concentration
+peaks<-c( max(y.022, na.rm=T), max(y.067, na.rm=T), max(y.2, na.rm=T), max(y.6, na.rm=T), max(y.18, na.rm=T))
+conc<-c(0.22, 0.67, 2, 6,18)
+plot(conc, peaks, main= "DENV4 in Rhesus Macaque", xlab="Concentration of IgG (mg/Kg)", ylab= "Peak Viremia (Log10 Eq FFU/ml)",cex.lab=1.4, cex.main=1.5, cex.axis=1.4, type="b")
+
+
+plot(x.PCS2, y.PCS, type="b",ylab="% Infected Cells", xlab="Antibody Concentration (log10 ug/ml)",main="DENV2 in PBMC",cex.lab=1.4, cex.main=1.5, cex.axis=1.4)
+
+ pdf(file = "~/Desktop/Fig3A.pdf", width = 6, height =4.75 ) 
+ par(mfrow=c(1,1))
+plot(conc, peaks, main= "DENV4 in Rhesus Macaque", xlab="Concentration of IgG (mg/Kg)", ylab= "Peak Viremia (Log10 Eq FFU/ml)",cex.lab=1.4, cex.main=1.5, cex.axis=1.4, type="b")
+dev.off()
+
+```
+
+
+
+
+
